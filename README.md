@@ -10,16 +10,20 @@ dotfiles/
 ├── bootstrap.sh              # install / unlink / restow helper
 └── hyprland/                  # the Stow package
     └── .config/
-        ├── hypr/              # hyprland.conf, hyprland.lua
-        ├── quickshell/        # shell.qml, workspaces.json
-        ├── my_quickshell/     # experimental QML panels
+        ├── hypr/
+        │   └── hyprland.lua   # upstream v0.57.2 example + Quickshell autostart
+        ├── quickshell/
+        │   ├── shell.qml
+        │   └── workspaces.json
         └── Unknown Organization/
             └── quickshell.conf
 ```
 
 The `hyprland/` package mirrors `$HOME/.config`, so a file at
-`hyprland/.config/hypr/hyprland.conf` is linked to
-`~/.config/hypr/hyprland.conf`.
+`hyprland/.config/hypr/hyprland.lua` is linked to `~/.config/hypr/hyprland.lua`.
+
+Hyprland 0.57+ reads `hyprland.lua` and ignores `hyprland.conf`, so there is
+intentionally no `.conf` in this repo.
 
 ## Install
 
@@ -61,11 +65,19 @@ resolve symlinks to it automatically) so tracking stays consistent.
 
 ## Notes
 
+- `hyprland.lua` is the stock example from Hyprland `v0.57.2`, with one added
+  block that starts Quickshell on `hyprland.start`. To refresh it on upgrade:
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/hyprwm/Hyprland/v0.57.2/example/hyprland.lua \
+    -o ~/dotfiles/hyprland/.config/hypr/hyprland.lua
+  ```
+
+  then re-add the autostart block if you still want it.
 - `~/.config/quickshell/hyprquickshot/` is a separate upstream git repo and is
-  deliberately **not** vendored here; only the files I actually edit are
-  tracked.
-- `hyprland.conf` has `exec-once = quickshell`. `hyprland.lua` also starts
-  Quickshell via `hl.exec_cmd("qs")` on `hyprland.start`. Keep only one of the
-  two, depending on which config file Hyprland loads.
-- Third-party configs (foot, rofi, GTK, etc.) can be added later either as
-  more files in this package or as separate packages such as `terminal/`.
+  deliberately not vendored here.
+- Old experimental `~/.config/my_quickshell/` was removed. VSCodium may still
+  show stale entries in its recent-workspaces/history; those are harmless
+  editor metadata, not configs.
+- Other configs (foot, rofi, GTK, etc.) can be added later as more files in
+  this package or as separate packages such as `terminal/`.
