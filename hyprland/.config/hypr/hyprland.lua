@@ -10,7 +10,7 @@
 -- require("myColors")
 
 require("monitors")
-requice("input")
+require("input")
 
 ---------------------
 ---- MY PROGRAMS ----
