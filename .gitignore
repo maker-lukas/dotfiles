@@ -3,3 +3,4 @@
 *.pyc
 __pycache__/
 .wakatime/
+AGENTS.md
