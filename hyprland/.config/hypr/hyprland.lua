@@ -9,26 +9,14 @@
 -- Create your files separately and then require them like this:
 -- require("myColors")
 
-
-------------------
----- MONITORS ----
-------------------
-
--- See https://wiki.hypr.land/configuring/core/monitors/
-hl.monitor({
-    output   = "",
-    mode     = "preferred",
-    position = "auto",
-    scale    = "auto",
-})
-
+require("monitors")
 
 ---------------------
 ---- MY PROGRAMS ----
 ---------------------
 
 -- Set programs that you use
-local terminal    = "kitty"
+local terminal    = "ghostty"
 local fileManager = "dolphin"
 local menu        = "hyprlauncher"
 
@@ -36,7 +24,6 @@ local menu        = "hyprlauncher"
 -------------------
 ---- AUTOSTART ----
 -------------------
-
 -- See https://wiki.hypr.land/configuring/core/autostart/
 
 -- Autostart necessary processes (like notifications daemons, status bars, etc.)
@@ -90,8 +77,8 @@ hl.env("HYPRCURSOR_SIZE", "24")
 -- Refer to https://wiki.hypr.land/configuring/core/config-options/
 hl.config({
     general = {
-        gaps_in  = 5,
-        gaps_out = 20,
+        gaps_in  = 0,
+        gaps_out = 0,
 
         border_size = 2,
 
@@ -143,6 +130,7 @@ hl.curve("easeInOutCubic", { type = "bezier", points = { {0.65, 0.05}, {0.36, 1}
 hl.curve("linear",         { type = "bezier", points = { {0, 0},       {1, 1}       } })
 hl.curve("almostLinear",   { type = "bezier", points = { {0.5, 0.5},   {0.75, 1}    } })
 hl.curve("quick",          { type = "bezier", points = { {0.15, 0},    {0.1, 1}     } })
+hl.curve("easeOutCubic",   { type = "bezier", points = { {0.33, 1},    {0.68, 1}    } })
 
 -- Default springs
 hl.curve("easy",           { type = "spring", mass = 1, stiffness = 238.1191, damping = 24.21279333 })
@@ -160,9 +148,9 @@ hl.animation({ leaf = "layersIn",      enabled = true,  speed = 4,    bezier = "
 hl.animation({ leaf = "layersOut",     enabled = true,  speed = 1.5,  bezier = "linear",       style = "fade" })
 hl.animation({ leaf = "fadeLayersIn",  enabled = true,  speed = 1.79, bezier = "almostLinear" })
 hl.animation({ leaf = "fadeLayersOut", enabled = true,  speed = 1.39, bezier = "almostLinear" })
-hl.animation({ leaf = "workspaces",    enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
-hl.animation({ leaf = "workspacesIn",  enabled = true,  speed = 1.21, bezier = "almostLinear", style = "fade" })
-hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
+hl.animation({ leaf = "workspaces",    enabled = true,  speed = 2.5, bezier = "easeOutCubic", style = "slide" })
+hl.animation({ leaf = "workspacesIn",  enabled = true,  speed = 2.5, bezier = "easeOutCubic", style = "slide" })
+hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 2.5, bezier = "easeOutCubic", style = "slide" })
 hl.animation({ leaf = "zoomFactor",    enabled = true,  speed = 7,    bezier = "quick" })
 
 -- Ref https://wiki.hypr.land/configuring/core/rules/workspace-rules/
@@ -234,7 +222,7 @@ hl.config({
 hl.config({
     input = {
         kb_layout  = "us",
-        kb_variant = "",
+        kb_variant = "dvorak",
         kb_model   = "",
         kb_options = "",
         kb_rules   = "",
@@ -244,7 +232,7 @@ hl.config({
         sensitivity = 0, -- -1.0 - 1.0, 0 means no modification.
 
         touchpad = {
-            natural_scroll = false,
+            natural_scroll = true,
         },
     },
 })
@@ -286,21 +274,87 @@ hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
 hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
 
--- Switch workspaces with mainMod + [0-9]
--- Move active window to a workspace with mainMod + SHIFT + [0-9]
+-- GNOME-style dynamic workspaces: only workspaces containing windows plus one
+-- trailing empty workspace "exist". Empty workspaces between occupied ones are
+-- treated as closed, and the remaining ones are numbered contiguously, so an
+-- old workspace 5 can become desktop 4. This returns the real Hyprland IDs in
+-- the order the desktops are presented (index 1 = desktop 1, etc.).
+local function existingWorkspaceIds()
+    local byId = {}
+    local highest = 1
+    for _, ws in pairs(hl.get_workspaces()) do
+        local id = tonumber(ws.id) or 0
+        if id > 0 and not ws.is_empty and not ws.special then
+            byId[id] = true
+            if id > highest then
+                highest = id
+            end
+        end
+    end
+    byId[highest + 1] = true -- trailing empty workspace
+    -- The desktop you're on stays until you move away: closing its last window
+    -- must not yank the active pill out from under you.
+    local active = hl.get_active_workspace()
+    local activeId = active and tonumber(active.id) or 0
+    if activeId > 0 and not active.special then
+        byId[activeId] = true
+    end
+    -- Always keep at least two desktops.
+    local count = 0
+    for _ in pairs(byId) do count = count + 1 end
+    if count == 1 then
+        byId[1] = true -- nothing occupied: keep desktops 1 and 2
+    end
+    local ids = {}
+    for id in pairs(byId) do ids[#ids + 1] = id end
+    table.sort(ids)
+    return ids
+end
+
+local function adjacentWorkspaceId(step)
+    local ids = existingWorkspaceIds()
+    local active = hl.get_active_workspace()
+    local current = active and tonumber(active.id) or 1
+    local index = 0
+    for i, id in ipairs(ids) do
+        if id == current then
+            index = i
+            break
+        end
+    end
+    if index == 0 then
+        index = step > 0 and 0 or #ids + 1
+    end
+    return ids[math.max(1, math.min(#ids, index + step))]
+end
+
+-- Switch desktops with mainMod + [0-9], numbered 1..N by position.
+-- Move active window with mainMod + SHIFT + [0-9]; beyond N, use the raw ID.
 for i = 1, 10 do
     local key = i % 10 -- 10 maps to key 0
-    hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ workspace = i}))
-    hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }))
+    hl.bind(mainMod .. " + " .. key, function()
+        local ids = existingWorkspaceIds()
+        if i <= #ids then
+            hl.dispatch(hl.dsp.focus({ workspace = ids[i] }))
+        end
+    end)
+    hl.bind(mainMod .. " + SHIFT + " .. key, function()
+        local ids = existingWorkspaceIds()
+        hl.dispatch(hl.dsp.window.move({ workspace = ids[i] or i }))
+    end)
 end
 
 -- Example special workspace (scratchpad)
 hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:magic" }))
 
--- Scroll through existing workspaces with mainMod + scroll
-hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
+-- Scroll through existing workspaces with mainMod + scroll (skipping gaps)
+hl.bind(mainMod .. " + mouse_down", function()
+    hl.dispatch(hl.dsp.focus({ workspace = adjacentWorkspaceId(1) }))
+end)
+hl.bind(mainMod .. " + mouse_up", function()
+    hl.dispatch(hl.dsp.focus({ workspace = adjacentWorkspaceId(-1) }))
+end)
 
 -- Move/resize windows with mainMod + LMB/RMB and dragging
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
