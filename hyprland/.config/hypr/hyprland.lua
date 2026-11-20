@@ -10,6 +10,7 @@
 -- require("myColors")
 
 require("monitors")
+requice("input")
 
 ---------------------
 ---- MY PROGRAMS ----
@@ -83,7 +84,7 @@ hl.config({
         border_size = 2,
 
         col = {
-            active_border   = { colors = {"rgba(33ccffee)", "rgba(00ff99ee)"}, angle = 45 },
+            active_border = "rgba(ffffffff)",
             inactive_border = "rgba(595959aa)",
         },
 
@@ -97,7 +98,7 @@ hl.config({
     },
 
     decoration = {
-        rounding       = 10,
+        rounding = 0,
         rounding_power = 2,
 
         -- Change transparency of focused and unfocused windows
@@ -211,29 +212,6 @@ hl.config({
 hl.config({
     layers = {
         allow_new_top_layers_over_existing_fullscreen = true, -- Set to false to make newly mapped top layers render below existing covering fullscreen window
-    },
-})
-
-
----------------
----- INPUT ----
----------------
-
-hl.config({
-    input = {
-        kb_layout  = "us",
-        kb_variant = "dvorak",
-        kb_model   = "",
-        kb_options = "",
-        kb_rules   = "",
-
-        follow_mouse = 1,
-
-        sensitivity = 0, -- -1.0 - 1.0, 0 means no modification.
-
-        touchpad = {
-            natural_scroll = true,
-        },
     },
 })
 
