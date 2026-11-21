@@ -70,7 +70,7 @@ hl.config({
         gaps_in  = 0,
         gaps_out = 0,
 
-        border_size = 2,
+        border_size = 0,
 
         col = {
             active_border = "rgba(ffffffff)",
@@ -87,8 +87,8 @@ hl.config({
     },
 
     decoration = {
-        rounding = 0,
-        rounding_power = 2,
+        rounding = 5,
+        rounding_power = 3,
 
         -- Change transparency of focused and unfocused windows
         active_opacity   = 1.0,
@@ -234,6 +234,7 @@ hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
+hl.bind(mainMod .. " + SPACE", hl.dsp.global("quickshell:togglePopup"))
 
 -- Move focus with mainMod + arrow keys
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
