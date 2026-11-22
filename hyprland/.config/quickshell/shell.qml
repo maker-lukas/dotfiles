@@ -407,147 +407,189 @@ PanelWindow {
         }
     }
 
+    Item {
+        id: hotZone
+        width: 260
+        height: bar.height
+        anchors.horizontalCenter: parent.horizontalCenter
+
+        HoverHandler {
+            onHoveredChanged: popup.hot = hovered
+            onPointChanged: popup.hotX = point.scenePosition.x
+        }
+    }
+
     PopupWindow {
         id: popup
 
-        property real r: 16
+        // ---------- feel knobs ----------
+        property real r: 16               // final fillet / corner size
         property real cardWidth: 650
         property real cardHeight: 500
+        property real bulgeMax: 22        // how far the surface swells before it breaks
+        property real bulgeWidth: 110
+        property real dwell: 0.35         // seconds of hovering to break through
+        property real kStrain: 70         // fillet size while straining (big = very smooth)
+        property real kOpen: r * 1.2      // fillet size when fully open
+        property real springK: 300
+        property real springC: 26         // lower = more wobble
+
+
+        // ---------- inputs (set from the bar) ----------
+        property bool hot: false
+        property real hotX: bar.width / 2   // mouse x in bar coordinates
+
+        // ---------- state ----------
         property bool open: false
+        property real pressure: 0
+        property real ext: 0
+        property real vel: 0
+        property bool armed: true
+        readonly property real prog: Math.min(1, ext / cardHeight)
+
+        onHotChanged: if (!hot) armed = true
+
+        function ss(a, b, x) {
+            const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
+            return t * t * (3 - 2 * t)
+        }
 
         onOpenChanged: {
-            if (!popup.open) {
-                searchBar.query = ""
-                return
-            }
+        if (!open) {
+            pressure = 0
+            armed = !hot
+            searchBar.query = ""
+            return
+        }
             results.selected = 0
             Qt.callLater(() => searchBar.textInput.forceActiveFocus())
         }
 
-        property real hProg: open ? 1 : 0
-        Behavior on hProg {
-            NumberAnimation { duration: 320; easing.type: Easing.OutCubic }
+        // stay open while the mouse is in the hot zone or on the card
+        readonly property bool held: hot || cardHover.hovered
+        onHeldChanged: held ? closeTimer.stop() : (open ? closeTimer.start() : 0)
+        Timer { id: closeTimer; interval: 180; onTriggered: popup.open = false }
+
+        // ---------- physics ----------
+        FrameAnimation {
+            running: popup.hot || popup.pressure > 0 || popup.ext > 0.5 || popup.open
+            onTriggered: {
+                const dt = Math.min(frameTime, 0.033)
+
+                if (!popup.open) {
+                popup.pressure = (popup.hot && popup.armed)
+                    ? Math.min(1, popup.pressure + dt / popup.dwell)
+                    : Math.max(0, popup.pressure - dt / 0.2)
+                    if (popup.pressure >= 1) popup.open = true
+                }
+
+                const target = popup.open
+                    ? popup.cardHeight
+                    : popup.bulgeMax * Math.pow(popup.pressure, 0.6)
+
+                popup.vel += (popup.springK * (target - popup.ext) - popup.springC * popup.vel) * dt
+                popup.ext += popup.vel * dt
+
+                if (popup.ext < 0) { popup.ext = 0; popup.vel = 0 }
+                if (!popup.open && popup.pressure === 0 && popup.ext < 0.5) {
+                    popup.ext = 0; popup.vel = 0
+                }
+            }
         }
 
-        readonly property real cx: width / 2
-        readonly property real w: cardWidth
-        readonly property real h: Math.max(0, cardHeight * hProg)
-        readonly property real fr: Math.max(0, Math.min(h / 2, r))
-        readonly property real br: Math.max(0, Math.min(w / 2, h / 2,
-                                r + (1 - Math.min(hProg, 1)) * r * 1.5))
-
-        visible: open || h > 0.5
+        // ---------- window ----------
+        visible: open || ext > 0.5
         anchor.window: bar
         anchor.rect.x: bar.width / 2 - width / 2
         anchor.rect.y: bar.height - 1
-        // extra room so the overshoot never gets clipped
         implicitWidth: cardWidth + 140
-        implicitHeight: cardHeight * 1.25
+        implicitHeight: cardHeight * 1.25      // room for overshoot
         color: "transparent"
+        mask: Region { item: card }            // only the card area takes input
 
-        FocusScope {
+        // ---------- liquid ----------
+        ShaderEffect {
             anchors.fill: parent
-            focus: true
 
-            Keys.onPressed: event => {
-                if (event.key !== Qt.Key_Escape)
-                    return
+            // blob follows the mouse while straining, then slides to center
+            readonly property real mouseX: popup.hotX - (bar.width / 2 - popup.width / 2)
+            readonly property real clampedMouse: Math.max(popup.bulgeWidth, Math.min(popup.width - popup.bulgeWidth, mouseX))
 
-                popup.open = false
-                event.accepted = true
+            property vector2d size: Qt.vector2d(width, height)
+            property color color: bar.color
+            property real cx: clampedMouse + (popup.width / 2 - clampedMouse) * popup.ss(0.03, 0.5, popup.prog)
+            property real ext: popup.ext
+            property real boxW: popup.bulgeWidth + (popup.cardWidth - popup.bulgeWidth) * popup.ss(0.06, 0.6, popup.prog)
+            property real radius: popup.r
+            property real k: {
+                const tension = 1 - popup.ss(0, 0.5, popup.prog)
+                const base = popup.kOpen + (popup.kStrain - popup.kOpen) * tension
+                const speed = Math.min(1, Math.abs(popup.vel) / 2500)
+                return base * (1 - 0.25 * speed) * Math.min(1, popup.ext / 8)
             }
+
+            fragmentShader: Qt.resolvedUrl("shaders/liquid.frag.qsb")
         }
 
-        Shape {
-            anchors.fill: parent
-            preferredRendererType: Shape.CurveRenderer
-
-            ShapePath {
-                fillColor: bar.color
-                strokeColor: "transparent"
-                startX: popup.cx - popup.w / 2 - popup.fr
-                startY: 0
-
-                PathLine { x: popup.cx + popup.w / 2 + popup.fr; y: 0 }
-
-                PathArc {
-                    x: popup.cx + popup.w / 2; y: popup.fr
-                    radiusX: popup.fr; radiusY: popup.fr
-                    direction: PathArc.Counterclockwise
-                }
-
-                PathLine { x: popup.cx + popup.w / 2; y: popup.h - popup.br }
-
-                PathArc {
-                    x: popup.cx + popup.w / 2 - popup.br; y: popup.h
-                    radiusX: popup.br; radiusY: popup.br
-                    direction: PathArc.Clockwise
-                }
-
-                PathLine { x: popup.cx - popup.w / 2 + popup.br; y: popup.h }
-
-                PathArc {
-                    x: popup.cx - popup.w / 2; y: popup.h - popup.br
-                    radiusX: popup.br; radiusY: popup.br
-                    direction: PathArc.Clockwise
-                }
-
-                PathLine { x: popup.cx - popup.w / 2; y: popup.fr }
-
-                PathArc {
-                    x: popup.cx - popup.w / 2 - popup.fr; y: 0
-                    radiusX: popup.fr; radiusY: popup.fr
-                    direction: PathArc.Counterclockwise
-                }
-            }
-        }
-
+        // ---------- content ----------
         Item {
-            x: popup.cx - popup.cardWidth / 2
+            id: card
+            x: popup.width / 2 - popup.cardWidth / 2
             y: 0
             width: popup.cardWidth
-            height: popup.cardHeight
-            opacity: Math.max(0, Math.min(1, (popup.hProg - 0.55) * 2.5))
+            height: popup.ext
             clip: true
+            opacity: Math.max(0, Math.min(1, (popup.prog - 0.55) * 2.5))
 
-            Column {
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 12
+            HoverHandler { id: cardHover }
 
-                AppSearchBar {
-                    id: searchBar
-                    width: parent.width
-                    height: 48
-
-                    onUp: results.moveUp()
-                    onDown: results.moveDown()
-                    onActivate: results.activate()
+            FocusScope {
+                width: popup.cardWidth
+                height: popup.cardHeight
+                focus: true
+                Keys.onPressed: event => {
+                    if (event.key !== Qt.Key_Escape) return
+                    popup.open = false
+                    event.accepted = true
                 }
 
-                Item {
-                    width: parent.width
-                    height: parent.height - searchBar.height - parent.spacing
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 20
+                    spacing: 12
 
-                    Item {
-                        id: widgetArea
-                        anchors.fill: parent
-                        visible: searchBar.query.trim() === ""
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Widgets go here"
-                            color: Qt.rgba(1, 1, 1, 0.35)
-                            font.family: "Inter"
-                            font.pixelSize: 14
-                        }
+                    AppSearchBar {
+                        id: searchBar
+                        width: parent.width
+                        height: 48
+                        onUp: results.moveUp()
+                        onDown: results.moveDown()
+                        onActivate: results.activate()
                     }
 
-                    AppResults {
-                        id: results
-                        anchors.fill: parent
-                        visible: !widgetArea.visible
-                        query: searchBar.query
+                    Item {
+                        width: parent.width
+                        height: parent.height - searchBar.height - parent.spacing
+
+                        Item {
+                            id: widgetArea
+                            anchors.fill: parent
+                            visible: searchBar.query.trim() === ""
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Widgets go here"
+                                color: Qt.rgba(1, 1, 1, 0.35)
+                                font.family: "Inter"
+                                font.pixelSize: 14
+                            }
+                        }
+
+                        AppResults {
+                            id: results
+                            anchors.fill: parent
+                            visible: !widgetArea.visible
+                            query: searchBar.query
+                        }
                     }
                 }
             }
@@ -555,9 +597,16 @@ PanelWindow {
     }
 
     HyprlandFocusGrab {
-        windows: [popup]
+        // Whitelist the bar too: with only the popup listed, activating the
+        // grab blocks input to the hot zone, hot flips false, and a transient
+        // clear then re-arms it into an open/close loop.
+        windows: [popup, bar]
         active: popup.open
-        onCleared: popup.open = false
+        // Ignore clears while the pointer is still on the bar/card — a
+        // spurious compositor clear (e.g. toplevel activation) would close the
+        // popup and make the hot zone reopen it over and over. Only a real
+        // click away, with nothing held, should dismiss it.
+        onCleared: if (!popup.held) popup.open = false
     }
 
     GlobalShortcut {
