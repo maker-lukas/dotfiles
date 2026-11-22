@@ -194,178 +194,15 @@ PanelWindow {
         }
     }
 
-    component WorkspaceSwitcher: Item {
-        id: switcher
-
-        property color dotColor: "white"
-        property int dotSize: 8
-        property int dotSpacing: 5
-        property int panelHeight: 30
-        property int sidePadding: bar.pillSidePadding
-        property int duration: 250
-        property int scrollTimeout: 150
-        property bool canScroll: true
-        property bool hovered: false
-
-        Timer {
-            id: scrollCooldown
-            interval: switcher.scrollTimeout
-            repeat: false
-            onTriggered: switcher.canScroll = true
-        }
-
-        property var occupiedIds: {
-            const ids = []
-            for (const toplevel of Hyprland.toplevels.values) {
-                const ws = toplevel.workspace
-                if (ws !== null && ws.id > 0 && !ids.includes(ws.id))
-                    ids.push(ws.id)
-            }
-            ids.sort((a, b) => a - b)
-            return ids
-        }
-
-        property int lastOccupied: switcher.occupiedIds.length > 0
-                                   ? switcher.occupiedIds[switcher.occupiedIds.length - 1]
-                                   : 1
-
-
-        property var workspaceIds: {
-            const ids = switcher.occupiedIds.slice()
-            const trailing = switcher.lastOccupied + 1
-            if (!ids.includes(trailing))
-                ids.push(trailing)
-            const focused = Hyprland.focusedWorkspace !== null
-                            ? Hyprland.focusedWorkspace.id : 0
-            if (focused > 0 && !ids.includes(focused))
-                ids.push(focused)
-            if (ids.length === 1)
-                ids.push(ids[0] === 1 ? 2 : 1)
-            ids.sort((a, b) => a - b)
-            return ids
-        }
-
-        property int workspaceCount: switcher.workspaceIds.length
-
-        function adjacentWorkspaceId(current, step) {
-            const ids = switcher.workspaceIds
-            if (step > 0) {
-                for (const id of ids)
-                    if (id > current)
-                        return id
-                return ids[ids.length - 1]
-            }
-            for (let i = ids.length - 1; i >= 0; i--)
-                if (ids[i] < current)
-                    return ids[i]
-            return ids[0]
-        }
-
-        property real widthMultiplier: switcher.workspaceCount <= 2 ? 3.625
-                                     : switcher.workspaceCount <= 5 ? 3.25
-                                     : 2.75
-
-        implicitWidth: dotsRow.implicitWidth + switcher.sidePadding * 2
-        implicitHeight: switcher.panelHeight
-
-        HoverPill {
-            hovered: switcher.hovered
-        }
-
-        Row {
-            id: dotsRow
-            x: switcher.sidePadding
-            y: (switcher.panelHeight - switcher.dotSize) / 2
-            spacing: switcher.dotSpacing
-
-            Repeater {
-                model: switcher.workspaceIds
-
-                Rectangle {
-                    id: dot
-                    required property int modelData
-
-                    width: switcher.dotSize * (1 + (switcher.widthMultiplier - 1) * dot.expansion)
-                    height: switcher.dotSize
-                    radius: 999                   // GNOME: border-radius: 999px
-                    color: switcher.dotColor
-
-                    property bool isActive: Hyprland.focusedWorkspace !== null
-                                            && Hyprland.focusedWorkspace.id === dot.modelData
-
-                    property real expansion: dot.isActive ? 1 : 0
-                    property real targetScale: dot.isActive ? 1 : 0.75
-
-                    opacity: 0.5 + 0.5 * dot.expansion
-                    scale: dot.targetScale
-
-                    Behavior on width {
-                        NumberAnimation {
-                            duration: switcher.duration
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-                    Behavior on opacity {
-                        NumberAnimation {
-                            duration: switcher.duration
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-                    Behavior on scale {
-                        NumberAnimation {
-                            duration: 500
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-
-                    Component.onCompleted: {
-                        scale = 0
-                        scale = Qt.binding(() => dot.targetScale)
-                    }
-
-                    TapHandler {
-                        cursorShape: Qt.PointingHandCursor
-                        onTapped: Hyprland.dispatch('hl.dsp.focus({ workspace = "' + dot.modelData + '" })')
-                    }
-                }
-            }
-        }
-
-        HoverHandler {
-            id: hoverHandler
-            onHoveredChanged: switcher.hovered = hoverHandler.hovered
-        }
-
-        WheelHandler {
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            onWheel: event => {
-                if (event.angleDelta.y === 0)
-                    return
-
-                if (!switcher.canScroll) {
-                    event.accepted = true
-                    return
-                }
-
-                const current = Hyprland.focusedWorkspace !== null
-                                ? Hyprland.focusedWorkspace.id : 1
-                const step = event.angleDelta.y < 0 ? 1 : -1
-                const target = switcher.adjacentWorkspaceId(current, step)
-                Hyprland.dispatch('hl.dsp.focus({ workspace = "' + target + '" })')
-                event.accepted = true
-
-                switcher.canScroll = false
-                scrollCooldown.restart()
-            }
-        }
-    }
-
-    WorkspaceSwitcher {
+    Desktops {
         anchors {
             left: parent.left
             leftMargin: 0
             verticalCenter: parent.verticalCenter
         }
+        pillPadding: bar.pillPadding
+        sidePadding: bar.pillSidePadding
+        panelHeight: bar.implicitHeight
     }
 
     Item {
@@ -422,24 +259,21 @@ PanelWindow {
     PopupWindow {
         id: popup
 
-        // ---------- feel knobs ----------
-        property real r: 16               // final fillet / corner size
+        property real r: 16
         property real cardWidth: 650
         property real cardHeight: 500
-        property real bulgeMax: 22        // how far the surface swells before it breaks
+        property real bulgeMax: 22
         property real bulgeWidth: 110
-        property real dwell: 0.35         // seconds of hovering to break through
-        property real kStrain: 70         // fillet size while straining (big = very smooth)
-        property real kOpen: r * 1.2      // fillet size when fully open
+        property real dwell: 0.35
+        property real kStrain: 70
+        property real kOpen: r * 1.2
         property real springK: 300
-        property real springC: 26         // lower = more wobble
+        property real springC: 26
 
 
-        // ---------- inputs (set from the bar) ----------
         property bool hot: false
-        property real hotX: bar.width / 2   // mouse x in bar coordinates
+        property real hotX: bar.width / 2
 
-        // ---------- state ----------
         property bool open: false
         property real pressure: 0
         property real ext: 0
@@ -455,22 +289,25 @@ PanelWindow {
         }
 
         onOpenChanged: {
-        if (!open) {
-            pressure = 0
-            armed = !hot
-            searchBar.query = ""
-            return
-        }
+            if (!open) {
+                pressure = 0
+                armed = false
+                rearmTimer.restart()
+                searchBar.query = ""
+                return
+            }
             results.selected = 0
             Qt.callLater(() => searchBar.textInput.forceActiveFocus())
         }
 
-        // stay open while the mouse is in the hot zone or on the card
-        readonly property bool held: hot || cardHover.hovered
-        onHeldChanged: held ? closeTimer.stop() : (open ? closeTimer.start() : 0)
+        Timer {
+            id: rearmTimer
+            interval: 300
+            onTriggered: popup.armed = !popup.hot
+        }
+
         Timer { id: closeTimer; interval: 180; onTriggered: popup.open = false }
 
-        // ---------- physics ----------
         FrameAnimation {
             running: popup.hot || popup.pressure > 0 || popup.ext > 0.5 || popup.open
             onTriggered: {
@@ -497,17 +334,15 @@ PanelWindow {
             }
         }
 
-        // ---------- window ----------
         visible: open || ext > 0.5
         anchor.window: bar
         anchor.rect.x: bar.width / 2 - width / 2
         anchor.rect.y: bar.height - 1
         implicitWidth: cardWidth + 140
-        implicitHeight: cardHeight * 1.25      // room for overshoot
+        implicitHeight: cardHeight * 1.25
         color: "transparent"
-        mask: Region { item: card }            // only the card area takes input
+        mask: Region { item: card }
 
-        // ---------- liquid ----------
         ShaderEffect {
             anchors.fill: parent
 
@@ -531,7 +366,6 @@ PanelWindow {
             fragmentShader: Qt.resolvedUrl("shaders/liquid.frag.qsb")
         }
 
-        // ---------- content ----------
         Item {
             id: card
             x: popup.width / 2 - popup.cardWidth / 2
@@ -541,7 +375,13 @@ PanelWindow {
             clip: true
             opacity: Math.max(0, Math.min(1, (popup.prog - 0.55) * 2.5))
 
-            HoverHandler { id: cardHover }
+            HoverHandler {
+                id: cardHover
+                onHoveredChanged: {
+                    if (hovered) cloteTimer.stop()
+                    else if (popup.open) closeTimer.start()
+                }
+                }
 
             FocusScope {
                 width: popup.cardWidth
@@ -597,16 +437,9 @@ PanelWindow {
     }
 
     HyprlandFocusGrab {
-        // Whitelist the bar too: with only the popup listed, activating the
-        // grab blocks input to the hot zone, hot flips false, and a transient
-        // clear then re-arms it into an open/close loop.
-        windows: [popup, bar]
+        windows: [popup]
         active: popup.open
-        // Ignore clears while the pointer is still on the bar/card — a
-        // spurious compositor clear (e.g. toplevel activation) would close the
-        // popup and make the hot zone reopen it over and over. Only a real
-        // click away, with nothing held, should dismiss it.
-        onCleared: if (!popup.held) popup.open = false
+        onCleared: popup.open = false
     }
 
     GlobalShortcut {

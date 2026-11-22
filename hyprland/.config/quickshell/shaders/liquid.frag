@@ -42,4 +42,4 @@ void main() {
     float aa = max(fwidth(d), 0.0001);
     float a = 1.0 - smoothstep(-aa, aa, d);
     fragColor = color * (a * qt_Opacity);
-}
+}2
