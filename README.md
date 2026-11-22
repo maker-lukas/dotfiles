@@ -8,7 +8,11 @@ folder so editors and Wakatime see a single project (`hyprland-dotfiles`).
 ```
 dotfiles/
 ├── bootstrap.sh              # install / unlink / restow helper
-└── hyprland/                  # the Stow package
+├── fastfetch/                 # Stow package: fastfetch config
+│   └── .config/
+│       └── fastfetch/
+│           └── config.jsonc  # generated with fastfetch --gen-config
+└── hyprland/                  # Stow package: Hyprland + Quickshell
     └── .config/
         ├── hypr/
         │   └── hyprland.lua   # upstream v0.57.2 example + Quickshell autostart
@@ -19,8 +23,10 @@ dotfiles/
             └── quickshell.conf
 ```
 
-The `hyprland/` package mirrors `$HOME/.config`, so a file at
-`hyprland/.config/hypr/hyprland.lua` is linked to `~/.config/hypr/hyprland.lua`.
+Each package mirrors `$HOME/.config`, so a file at
+`hyprland/.config/hypr/hyprland.lua` is linked to `~/.config/hypr/hyprland.lua`,
+and `fastfetch/.config/fastfetch/config.jsonc` is linked to
+`~/.config/fastfetch/config.jsonc`.
 
 Hyprland 0.57+ reads `hyprland.lua` and ignores `hyprland.conf`, so there is
 intentionally no `.conf` in this repo.
@@ -79,5 +85,11 @@ resolve symlinks to it automatically) so tracking stays consistent.
 - Old experimental `~/.config/my_quickshell/` was removed. VSCodium may still
   show stale entries in its recent-workspaces/history; those are harmless
   editor metadata, not configs.
+- To refresh the fastfetch config for a new fastfetch version:
+
+  ```sh
+  fastfetch --gen-config ~/dotfiles/fastfetch/.config/fastfetch/config.jsonc
+  ```
+
 - Other configs (foot, rofi, GTK, etc.) can be added later as more files in
-  this package or as separate packages such as `terminal/`.
+  an existing package or as separate packages such as `terminal/`.
