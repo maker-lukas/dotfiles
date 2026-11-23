@@ -11,12 +11,12 @@ PopupWindow {
     property real cardWidth: 650
     property real cardHeight: 500
     property real r: 16
-    property real bigR: 40
-    property real kStart: 40
+    property real bigR: 50
+    property real kStart: 50
     property real leanMax: 0.9
-    property real springK: 260
-    property real springC: 24
-    property real timeScale: 0.7 // 1.0 = normal; lower for slow-motion inspection
+    property real springK: 200
+    property real springC: 25
+    property real timeScale: 1 // 1.0 = normal; lower for slow-motion inspection
 
     property bool open: false
     property real ext: rest

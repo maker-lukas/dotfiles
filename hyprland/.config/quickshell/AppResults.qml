@@ -70,8 +70,7 @@ Item {
                 radius: 10
                 color: row.index === root.selected
                     ? Qt.rgba(1, 1, 1, 0.16)
-                    : tap.hovered ? Qt.rgba(1, 1, 1, 0.07)
-                                  : "transparent"
+                    : "transparent"
             }
 
             Image {
@@ -94,8 +93,16 @@ Item {
                 font.pixelSize: 14
             }
 
+            HoverHandler {
+                id: hover
+                cursorShape: Qt.PointingHandCursor
+                onHoveredChanged: {
+                    if (hover.hovered)
+                        root.selected = row.index
+                }
+            }
+
             TapHandler {
-                id: tap
                 cursorShape: Qt.PointingHandCursor
                 onTapped: root.launch(row.index)
             }
