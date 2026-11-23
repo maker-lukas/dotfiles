@@ -26,7 +26,7 @@ float sdRoundBox(vec2 p, vec2 hs, float r) {
 }
 
 void main() {
-    vec2 p = qt_TexCoord0 *  size;
+    vec2 p = qt_TexCoord0 * size;
 
     float dSurface = p.y - 1.0;
 
@@ -34,13 +34,13 @@ void main() {
     float cy = (ext - overlap) * 0.5;
     vec2 hs = vec2(boxW * 0.5, (ext + overlap) * 0.5);
 
-    vec2 q = vec2(abs(p.x - cx) + lean * (p.y - ext), p.y - cy);
-    float dBox = sdRoundBox(q, hs, min(radius, min(hs.x, hs.y))) * inversesqrt(1.0 + lean * lean);
+    float L = min(lean, max(boxW * 0.5 - 20.0, 0.0) / max(ext, 1.0));
+    vec2 q = vec2(abs(p.x - cx) + L * p.y, p.y - cy);
+    float dBox = sdRoundBox(q, hs, min(radius, min(hs.x, hs.y))) * inversesqrt(1.0 + L * L);
 
     float d = roundUnion(dSurface, dBox, max(k, 0.001));
 
     float aa = max(fwidth(d), 0.0001);
     float a = 1.0 - smoothstep(-aa, aa, d);
     fragColor = color * (a * qt_Opacity);
-
 }

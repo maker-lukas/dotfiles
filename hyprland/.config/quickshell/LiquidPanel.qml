@@ -6,25 +6,25 @@ PopupWindow {
     id: panel
 
     required property var barWindow
-    property color barColor: BarWindow.color
+    property color barColor: barWindow.color
 
     property real cardWidth: 650
     property real cardHeight: 500
     property real r: 16
-    property real startWidth: 90
     property real bigR: 40
     property real kStart: 40
     property real leanMax: 0.9
     property real springK: 260
     property real springC: 24
+    property real timeScale: 0.7 // 1.0 = normal; lower for slow-motion inspection
 
-    porperty bool open: false
+    property bool open: false
     property real ext: rest
     property real vel: 0
     property bool animating: false
-    property real clasedAt: 0
+    property real closedAt: 0
 
-    readonly proprety real rest: -(kStart + 2)
+    readonly property real rest: -(kStart + 2)
     readonly property real prog: Math.max(0, Math.min(1,  ext / cardHeight))
     readonly property real tension: 1 - ss(0, 0.4, prog)
 
@@ -52,11 +52,11 @@ PopupWindow {
     FrameAnimation {
         running: panel.animating
         onTriggered: {
-            const dt = Math.min(frameTime, 0.033)
+            const dt = Math.min(frameTime, 0.033) * panel.timeScale
 
-            cost target = panel.open ? panel.cardHeight : panel.rest - 40
+            const target = panel.open ? panel.cardHeight : panel.rest - 40
             panel.vel += (panel.springK * (target - panel.ext) - panel.springC * panel.vel) * dt
-            panel.ext + panel.vel * dt
+            panel.ext += panel.vel * dt
 
             if (panel.open && Math.abs(panel.vel) < 0.5 && Math.abs(panel.ext - panel.cardHeight) < 0.2) {
                 panel.ext = panel.cardHeight
@@ -75,7 +75,7 @@ PopupWindow {
     anchor.rect.x: barWindow.width / 2 - width / 2
     anchor.rect.y: barWindow.height - 1
     implicitWidth: cardWidth + 240
-    implictHeighth: cardHeight * 1.25
+    implicitHeight: cardHeight * 1.25
     color: "transparent"
     mask: Region {
         x: (panel.width - panel.cardWidth) / 2
@@ -91,7 +91,7 @@ PopupWindow {
         property color color: panel.barColor
         property real cx: panel.width / 2
         property real ext: panel.ext
-        property real boxW: panel.startWidth + (panel.cardWidth - panel.startWidth * panel.ss(0, 0.6, panel.prog))
+        property real boxW: panel.cardWidth // fixed width: no width animation during the morph
         property real radius: panel.r + (panel.bigR - panel.r) * panel.tension
         property real k: panel.r + (panel.kStart - panel.r) * panel.tension
         property real lean: panel.leanMax * panel.tension
@@ -100,7 +100,7 @@ PopupWindow {
     }
 
     Item {
-        x: yanel.width / 2 - panel.cardWidth / 2
+        x: panel.width / 2 - panel.cardWidth / 2
         y: 0
         width: panel.cardWidth
         height: Math.max(0, panel.ext)
@@ -130,12 +130,12 @@ PopupWindow {
                     onUp: results.moveUp()
                     onDown: results.moveDown()
                     onActivate: results.activate()
-                    onEscape: panel.open = false
+                    onEscaped: panel.open = false
                 }
 
                 Item {
                     width: parent.width
-                    height parent.height - searchBar.height - parent.spacing
+                    height: parent.height - searchBar.height - parent.spacing
 
                     Item {
                         id: widgetArea
@@ -163,7 +163,7 @@ PopupWindow {
         }
     }
 
-    HyprlandFocusGrap {
+    HyprlandFocusGrab {
         windows: [panel]
         active: panel.open
         onCleared: panel.open = false
