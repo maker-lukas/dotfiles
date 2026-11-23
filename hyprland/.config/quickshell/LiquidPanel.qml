@@ -13,10 +13,10 @@ PopupWindow {
     property real r: 16
     property real bigR: 50
     property real kStart: 50
-    property real leanMax: 0.9
-    property real springK: 200
-    property real springC: 25
-    property real timeScale: 1 // 1.0 = normal; lower for slow-motion inspection
+    property real leanMax: 0
+    property real springK: 250
+    property real springC: 24
+    property real timeScale: 0.7 // 1.0 = normal; lower for slow-motion inspection
 
     property bool open: false
     property real ext: rest
