@@ -11,7 +11,7 @@ PanelWindow {
     }
 
     implicitHeight: 30
-    color: "#000000"
+    color: "#121112"
 
     readonly property int pillPadding: 3
     readonly property int pillSidePadding: 18
