@@ -16,11 +16,9 @@ PopupWindow {
     property real leanMax: 0
     property real springK: 250
     property real springC: 24
-    property real timeScale: 1 // 1.0 = normal; lower for slow-motion inspection
-    property real filletEase: 2 // >1 holds the neck fillet large longer; raise it to slow the morph further
-    property real bottomFinish: 1 // fraction of travel where the bottom corners reach their final radius
-    property real filletSpeed: 8 // lower = fillet reaches its final shape slower; popup speed is unchanged
-    property real filletProg: 0 // time-based follower of prog, drives both fillet curves
+    property real timeScale: 1
+    property real filletEase: 2
+    property real bottomFinish: 1
 
     property bool open: false
     property real ext: rest
@@ -30,8 +28,8 @@ PopupWindow {
 
     readonly property real rest: -(kStart + 2)
     readonly property real prog: Math.max(0, Math.min(1,  ext / cardHeight))
-    readonly property real neckTension: 1 - Math.pow(filletProg, filletEase) // neck lags the panel, so it changes slowly instead of flashing
-    readonly property real bottomTension: 1 - ss(0, bottomFinish, filletProg)
+    readonly property real neckTension: 1 - Math.pow(prog, filletEase)
+    readonly property real bottomTension: 1 - ss(0, bottomFinish, prog)
 
     function ss(a, b, x) {
         const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
@@ -63,22 +61,14 @@ PopupWindow {
             panel.vel += (panel.springK * (target - panel.ext) - panel.springC * panel.vel) * dt
             panel.ext += panel.vel * dt
 
-            // fillet follows its own clock in both directions; popup spring is untouched
-            panel.filletProg += (panel.prog - panel.filletProg) * Math.min(1, panel.filletSpeed * dt)
-
             if (panel.open && Math.abs(panel.vel) < 0.5 && Math.abs(panel.ext - panel.cardHeight) < 0.2) {
                 panel.ext = panel.cardHeight
                 panel.vel = 0
-                if (panel.filletProg > 0.99) {
-                    panel.filletProg = 1
-                    panel.animating = false
-                }
+                panel.animating = false
             } else if (!panel.open && panel.ext <= panel.rest) {
                 panel.ext = panel.rest
-                if (panel.filletProg < 0.01) {
-                    panel.filletProg = 0
-                    panel.animating = false
-                }
+                panel.vel = 0
+                panel.animating = false
             }
         }
     }
@@ -104,7 +94,7 @@ PopupWindow {
         property color color: panel.barColor
         property real cx: panel.width / 2
         property real ext: panel.ext
-        property real boxW: panel.cardWidth // fixed width: no width animation during the morph
+        property real boxW: panel.cardWidth
         property real radius: panel.r + (panel.bigR - panel.r) * panel.bottomTension
         property real k: panel.r + (panel.kStart - panel.r) * panel.neckTension
         property real lean: panel.leanMax * panel.neckTension
