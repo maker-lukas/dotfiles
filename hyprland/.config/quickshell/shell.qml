@@ -1,6 +1,12 @@
+//@ pragma UseQApplication
+
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Services.Pipewire
+import Quickshell.Services.UPower
+import Quickshell.Networking
+import Quickshell.Services.SystemTray
 
 PanelWindow {
     id: bar
@@ -11,7 +17,7 @@ PanelWindow {
     }
 
     implicitHeight: 30
-    color: "#121112"
+    color: "#000000"
 
     readonly property int pillPadding: 3
     readonly property int pillSidePadding: 18
@@ -32,172 +38,7 @@ PanelWindow {
         }
     }
 
-    component WorkspaceSwitcher: Item {
-        id: switcher
-
-        property color dotColor: "white"
-        property int dotSize: 8
-        property int dotSpacing: 5
-        property int panelHeight: 30
-        property int sidePadding: bar.pillSidePadding
-        property int duration: 250
-        property int scrollTimeout: 150
-        property bool canScroll: true
-        property bool hovered: false
-
-        Timer {
-            id: scrollCooldown
-            interval: switcher.scrollTimeout
-            repeat: false
-            onTriggered: switcher.canScroll = true
-        }
-
-        property var occupiedIds: {
-            const ids = []
-            for (const toplevel of Hyprland.toplevels.values) {
-                const ws = toplevel.workspace
-                if (ws !== null && ws.id > 0 && !ids.includes(ws.id))
-                    ids.push(ws.id)
-            }
-            ids.sort((a, b) => a - b)
-            return ids
-        }
-
-        property int lastOccupied: switcher.occupiedIds.length > 0
-                                   ? switcher.occupiedIds[switcher.occupiedIds.length - 1]
-                                   : 1
-
-        property var workspaceIds: {
-            const ids = switcher.occupiedIds.slice()
-            const trailing = switcher.lastOccupied + 1
-            if (!ids.includes(trailing))
-                ids.push(trailing)
-            const focused = Hyprland.focusedWorkspace !== null
-                            ? Hyprland.focusedWorkspace.id : 0
-            if (focused > 0 && !ids.includes(focused))
-                ids.push(focused)
-            if (ids.length === 1)
-                ids.push(ids[0] === 1 ? 2 : 1)
-            ids.sort((a, b) => a - b)
-            return ids
-        }
-
-        property int workspaceCount: switcher.workspaceIds.length
-
-        function adjacentWorkspaceId(current, step) {
-            const ids = switcher.workspaceIds
-            if (step > 0) {
-                for (const id of ids)
-                    if (id > current)
-                        return id
-                return ids[ids.length - 1]
-            }
-            for (let i = ids.length - 1; i >= 0; i--)
-                if (ids[i] < current)
-                    return ids[i]
-            return ids[0]
-        }
-
-        property real widthMultiplier: switcher.workspaceCount <= 2 ? 3.625
-                                     : switcher.workspaceCount <= 5 ? 3.25
-                                     : 2.75
-
-        implicitWidth: dotsRow.implicitWidth + switcher.sidePadding * 2
-        implicitHeight: switcher.panelHeight
-
-        HoverPill {
-            hovered: switcher.hovered
-        }
-
-        Row {
-            id: dotsRow
-            x: switcher.sidePadding
-            y: (switcher.panelHeight - switcher.dotSize) / 2
-            spacing: switcher.dotSpacing
-
-            Repeater {
-                model: switcher.workspaceIds
-
-                Rectangle {
-                    id: dot
-                    required property int modelData
-
-                    width: switcher.dotSize * (1 + (switcher.widthMultiplier - 1) * dot.expansion)
-                    height: switcher.dotSize
-                    radius: 999
-                    color: switcher.dotColor
-
-                    property bool isActive: Hyprland.focusedWorkspace !== null
-                                            && Hyprland.focusedWorkspace.id === dot.modelData
-
-                    property real expansion: dot.isActive ? 1 : 0
-                    property real targetScale: dot.isActive ? 1 : 0.75
-
-                    opacity: 0.5 + 0.5 * dot.expansion
-                    scale: dot.targetScale
-
-                    Behavior on width {
-                        NumberAnimation {
-                            duration: switcher.duration
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-                    Behavior on opacity {
-                        NumberAnimation {
-                            duration: switcher.duration
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-                    Behavior on scale {
-                        NumberAnimation {
-                            duration: 500
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-
-                    Component.onCompleted: {
-                        scale = 0
-                        scale = Qt.binding(() => dot.targetScale)
-                    }
-
-                    TapHandler {
-                        cursorShape: Qt.PointingHandCursor
-                        onTapped: Hyprland.dispatch('hl.dsp.focus({ workspace = "' + dot.modelData + '" })')
-                    }
-                }
-            }
-        }
-
-        HoverHandler {
-            id: hoverHandler
-            onHoveredChanged: switcher.hovered = hoverHandler.hovered
-        }
-
-        WheelHandler {
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            onWheel: event => {
-                if (event.angleDelta.y === 0)
-                    return
-
-                if (!switcher.canScroll) {
-                    event.accepted = true
-                    return
-                }
-
-                const current = Hyprland.focusedWorkspace !== null
-                                ? Hyprland.focusedWorkspace.id : 1
-                const step = event.angleDelta.y < 0 ? 1 : -1
-                const target = switcher.adjacentWorkspaceId(current, step)
-                Hyprland.dispatch('hl.dsp.focus({ workspace = "' + target + '" })')
-                event.accepted = true
-
-                switcher.canScroll = false
-                scrollCooldown.restart()
-            }
-        }
-    }
-
-    WorkspaceSwitcher {
+    DesktopSwitcher {
         anchors {
             left: parent.left
             leftMargin: 0
@@ -235,7 +76,10 @@ PanelWindow {
 
         MouseArea {
             anchors.fill: parent
-            onClicked: panel.toggle()
+            onClicked: {
+                quickPanel.open = false
+                panel.toggle()
+            }
         }
 
         HoverHandler {
@@ -244,14 +88,163 @@ PanelWindow {
         }
     }
 
+    Item {
+        id: statusArea
+        anchors {
+            right: parent.right
+            verticalCenter: parent.verticalCenter
+        }
+        width: statusRow.implicitWidth + bar.pillSidePadding * 2
+        height: parent.height
+
+        property bool hovered: false
+
+        HoverPill {
+            hovered: statusArea.hovered
+        }
+
+        Row {
+            id: statusRow
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: bar.pillSidePadding
+            spacing: 8
+
+            Image {
+                width: 15
+                height: 15
+                anchors.verticalCenter: parent.verticalCenter
+                source: statusArea.networkIcon
+            }
+
+            Image {
+                width: 15
+                height: 15
+                anchors.verticalCenter: parent.verticalCenter
+                source: statusArea.volumeIcon
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: statusArea.batteryText
+                color: "white"
+                font.family: "Inter"
+                font.pixelSize: 12
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "▾"
+                color: Qt.rgba(1, 1, 1, 0.65)
+                font.family: "Inter"
+                font.pixelSize: 10
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                panel.open = false
+                quickPanel.toggle()
+            }
+        }
+
+        HoverHandler {
+            id: statusHoverHandler
+            onHoveredChanged: statusArea.hovered = statusHoverHandler.hovered
+        }
+    }
+
+    Item {
+        id: trayArea
+        anchors {
+            right: statusArea.left
+            rightMargin: 4
+            verticalCenter: parent.verticalCenter
+        }
+        width: trayRow.implicitWidth
+        height: parent.height
+
+        Row {
+            id: trayRow
+            anchors {
+                right: parent.right
+                verticalCenter: parent.verticalCenter
+            }
+            spacing: 6
+
+            Repeater {
+                model: SystemTray.items
+
+                delegate: Item {
+                    id: trayDelegate
+                    required property var modelData
+                    width: 16
+                    height: 16
+
+                    Image {
+                        anchors.fill: parent
+                        source: modelData.icon
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.RightButton || modelData.onlyMenu) {
+                                if (modelData.hasMenu) {
+                                    const p = trayDelegate.mapToItem(
+                                        bar.contentItem,
+                                        trayDelegate.width / 2,
+                                        trayDelegate.height
+                                    )
+                                    trayMenu.show(modelData.menu, p.x)
+                                }
+                            } else {
+                                modelData.activate()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    NotificationsService {
+        id: notifications
+    }
+
     LiquidPanel {
         id: panel
+        barWindow: bar
+    }
+
+    LiquidNotifications {
+        id: notificationPopup
+        barWindow: bar
+        notifications: notifications
+    }
+
+    QuickPanel {
+        id: quickPanel
+        barWindow: bar
+    }
+
+    TrayMenu {
+        id: trayMenu
         barWindow: bar
     }
 
     GlobalShortcut {
         appid: "quickshell"
         name: "togglePopup"
-        onPressed: panel.toggle()
+        onPressed: {
+            quickPanel.open = false
+            panel.toggle()
+        }
     }
 }
